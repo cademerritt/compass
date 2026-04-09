@@ -27,7 +27,9 @@ def audio_callback(indata, frames, time, status):
 SILENCE_THRESHOLD = 0.002
 
 def transcribe_loop():
+    import os
     buffer = []
+    stop_count = 0
     while True:
         chunk = audio_queue.get()
         buffer.append(chunk)
@@ -35,11 +37,16 @@ def transcribe_loop():
             audio_data = np.concatenate(buffer, axis=0).flatten().astype(np.float32)
             buffer = []
             if np.abs(audio_data).mean() < SILENCE_THRESHOLD:
+                stop_count = 0
                 continue
             result = model.transcribe(audio_data, fp16=False, language='en')
             text = result["text"].strip()
             if text:
                 print(f">> {text}")
+                stop_count += text.lower().count("stop")
+                if stop_count >= 3:
+                    print("Stopping COMPASS.")
+                    os.kill(os.getpid(), 9)
                 type_to_cursor(text)
 
 t = threading.Thread(target=transcribe_loop, daemon=True)
